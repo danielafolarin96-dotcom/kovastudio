@@ -1,0 +1,51 @@
+import "server-only";
+import { NextResponse, type NextRequest } from "next/server";
+import { env } from "@/lib/env";
+import { getCurrentUser, type CurrentUser } from "@/lib/auth";
+
+// Small helpers shared by the API routes.
+
+export function jsonError(message: string, status: number, extra: Record<string, unknown> = {}) {
+  return NextResponse.json({ error: message, ...extra }, { status, headers: { "Cache-Control": "no-store" } });
+}
+
+export function json(data: unknown, status = 200) {
+  return NextResponse.json(data, { status, headers: { "Cache-Control": "no-store" } });
+}
+
+// Blocks other websites from calling our private routes from a browser.
+export function originAllowed(req: NextRequest): boolean {
+  const origin = req.headers.get("origin");
+  if (!origin) return false;
+  return env.allowedOrigins.includes(origin.replace(/\/$/, ""));
+}
+
+export function clientIp(req: NextRequest): string {
+  return (req.headers.get("x-forwarded-for") ?? "").split(",")[0].trim() || req.headers.get("x-real-ip") || "local";
+}
+
+type Guard = { ok: true; current: CurrentUser } | { ok: false; response: NextResponse };
+
+export async function guardUser(req: NextRequest, opts: { admin?: boolean; checkOrigin?: boolean } = {}): Promise<Guard> {
+  if (opts.checkOrigin !== false && !originAllowed(req)) {
+    return {
+      ok: false,
+      response: jsonError(
+        `This site (${req.headers.get("origin") ?? "unknown"}) is not in ALLOWED_ORIGINS. Open the app at ${env.allowedOrigins[0]}.`,
+        403,
+      ),
+    };
+  }
+  const current = await getCurrentUser();
+  if (!current) return { ok: false, response: jsonError("Please log in again.", 401) };
+  if (opts.admin && !current.isAdmin) return { ok: false, response: jsonError("Admins only.", 403) };
+  return { ok: true, current };
+}
+
+export async function readJson<T>(req: NextRequest): Promise<Partial<T>> {
+  try {
+    return (await req.json()) as Partial<T>;
+  } catch {
+    return {};
+  }
+}

@@ -1,0 +1,104 @@
+# SECURITY.md: Kova Studio
+
+What we protect, how, and what is still open. Read before touching auth, metering, payments, keys or public routes.
+
+## What matters most
+
+1. **Our AI provider balance** (fal now, Decart later). Every second of AI costs real money. A leaked key or broken metering drains it.
+2. **User accounts and data.** Emails, passwords (handled by Supabase), session history, payment records.
+3. **Misuse of the product.** Impersonation, scams, non-consensual content of real people.
+
+## Secrets
+
+| Secret | Where it lives | Never |
+| --- | --- | --- |
+| `SUPABASE_SECRET_KEY` | `.env.local`, Vercel env | In the browser, in `NEXT_PUBLIC_*`, in logs, in git |
+| `DECART_API_KEY` | `.env.local`, Vercel env | Same |
+| `FAL_KEY` | `.env.local`, Vercel env | Same. The browser only ever gets 60-second fal tokens from `/api/fal/token` |
+| `PAYSTACK_SECRET_KEY` (Phase 2) | `.env.local`, Vercel env | Same |
+
+- `.env.local` is in `.gitignore`. Check before every first push: `git status` must not list it.
+- `lib/env.ts` imports `server-only`, so importing it into a client component fails the build.
+- If a secret leaks: rotate it immediately (Supabase > API Keys, fal or Decart dashboard), update Vercel env, redeploy.
+
+## Controls in place
+
+**Auth**
+- Supabase email + password. Passwords never touch our code beyond passing them to Supabase.
+- `proxy.ts` refreshes sessions and redirects logged-out users away from `/studio`, `/account`, `/admin`, `/welcome`.
+- Server code uses `supabase.auth.getUser()` (verified with Supabase), not just the cookie.
+- Admin = email in `ADMIN_EMAILS` env, checked on the server for every admin page and route.
+- Reset-password answers the same whether or not the email exists (no account fishing).
+
+**Database**
+- RLS on every table. The browser can read only its own profile and sessions, and active presets.
+- All balance changes happen inside `security definer` SQL functions that only `service_role` can execute.
+- `begin_session` locks the profile row (`for update`), so two tabs cannot spend the same seconds twice. One open session per user.
+
+**Decart**
+- The browser gets a short-lived client token, never the real key.
+- Tokens are scoped: only `lucy-2.5`, only our origins, and `maxSessionDuration` equals the seconds reserved from the user's balance. When their time is up, Decart itself ends the session.
+- Viewers never get a Decart key. `/api/decart/watch-stream/[room]` forwards only for rooms that are live on a Kova channel right now, rate limited per IP.
+
+**API routes**
+- Every private route runs `guardUser`: checks the `Origin` header against `ALLOWED_ORIGINS` and the logged-in user.
+- Rate limits: session start (12 per 10 min per user), channel checks and watch requests (per IP).
+- Inputs validated and length-capped. Preset uploads: type check, 4 MB cap, random file names.
+
+**Admin and money**
+- Payments are recorded only through `grant_seconds` (service role), which writes the credits and the amount (in kobo), method and pack on one ledger row.
+- `expenses` and `credit_ledger` have RLS on with no browser policies. Only the server reads them, and only on admin pages.
+- Every admin page calls `requireAdmin()` and every admin route calls `guardUser(req, { admin: true })`.
+- `GET /api/admin/finance/export` (CSV) skips the Origin check because a normal link click sends no Origin, but it still requires an admin login. Cells are quoted and values starting with `=`, `+`, `-` or `@` are escaped so the CSV cannot run spreadsheet formulas.
+- Amounts are validated on the server (0 to N100m, whole kobo). Expense kinds and payment methods come from fixed lists.
+
+**Browser**
+- `Permissions-Policy` limits camera and mic to our own pages.
+- `X-Frame-Options: DENY` on private pages (no clickjacking).
+- Uploaded character pictures stay in the browser and go only to Decart during a session. Webcam video is never stored by us.
+
+**Content**
+- Everyone accepts the house rules before their first session.
+- Every uploaded picture needs a consent tick. Presets are admin-curated.
+- Free output carries a visible "KOVA STUDIO | AI" watermark.
+
+## Known gaps (be honest about these)
+
+| Gap | Risk | Plan |
+| --- | --- | --- |
+| On fal, the provider does not cut the stream when paid time runs out | A tampered browser could keep streaming on our fal balance | Studio stops itself, heartbeat closes the session server-side, fal tokens only last 60s and are refused once time is up; keep the fal balance small; switch to Decart when verified |
+| Metering trusts the browser's reported seconds, with a server floor from heartbeats | A skilled cheater can win back up to one session of reserved time | Keep `MAX_FREE_SESSION_SECONDS` small; move to Decart usage data if they offer it |
+| Watermark is drawn in the browser | A skilled free user could strip it from their own view/recording | Short free sessions make it not worth it; the channel stream to viewers also carries it |
+| Rate limits are in memory | On Vercel each instance counts separately | Upstash Redis in Phase 4 |
+| No automatic image moderation | Users could upload banned content | Consent tick + terms now; moderation API in Phase 4 |
+| Supabase default email is rate limited | Signups stall | Resend SMTP before launch |
+| No Content Security Policy yet | Less defense against injected scripts | Add CSP in Phase 4 |
+| Manual payments are typed in by an admin | A typo in the amount makes Finance wrong | Paystack webhook in Phase 2 records amounts automatically; fix a wrong amount in Supabase Table Editor (`credit_ledger.amount_kobo`) |
+| AI provider balance on /admin/finance is our own estimate | It can drift from fal's real balance | Log every top-up with the dollar amount; check the fal dashboard weekly |
+| Admin users and finance pages load all rows into memory | Slow once there are many thousands of users or sessions | Move totals into SQL views or functions when it gets slow |
+| Email confirmation is off (owner decision) | Anyone can sign up with an email they do not own | Signup gift is 0, so fake accounts cost nothing. Turn confirmation on if abuse starts |
+
+## Payments (Phase 2 rules)
+
+- Never grant credits from the browser redirect. Only from the webhook.
+- Verify `x-paystack-signature` (HMAC SHA512 of the raw body with the secret key) using a constant-time compare.
+- Re-verify the transaction with Paystack's verify API and check amount + currency against the pack in our DB.
+- Grant exactly once per reference (unique constraint + status check in one SQL function).
+
+## Launch checklist
+
+- [ ] `.env.local` not in git, secrets only in Vercel env
+- [ ] `ALLOWED_ORIGINS` and `NEXT_PUBLIC_SITE_URL` set to the real Vercel URL
+- [ ] Supabase Redirect URLs only list our own domains
+- [ ] Signup gift is 0 (email confirmation is off by decision)
+- [ ] Resend SMTP configured (password reset emails)
+- [ ] Test that a non-admin gets 403 on `/api/admin/grant`
+- [ ] Test that a free user sees the watermark and an admin does not
+- [ ] `supabase/migrations/2026-09-28_finance.sql` run in the SQL Editor
+- [ ] First fal top-up logged in /admin/finance (with dollars) so the balance estimate works
+- [ ] fal balance and a low-balance alert set on the fal dashboard
+- [ ] Terms and Privacy reviewed
+
+## Reporting
+
+Found a security issue? Email the owner directly. Do not open a public GitHub issue.
