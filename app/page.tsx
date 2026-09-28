@@ -229,7 +229,7 @@ export default async function Home() {
               1 credit = 1 minute of live AI, billed by the second. Any pack removes the watermark.
             </SectionHead>
             <div className="mt-12">
-              <RateCard mode="public" />
+              <RateCard mode="public" signedIn={signedIn} />
             </div>
           </div>
         </section>

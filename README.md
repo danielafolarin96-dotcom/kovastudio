@@ -63,7 +63,7 @@ git push -u origin main
 ```
 
 2. On vercel.com: **Add New > Project**, import the repo.
-3. Add every variable from `.env.local` under **Environment Variables**. Set `NEXT_PUBLIC_SITE_URL` and `ALLOWED_ORIGINS` to your Vercel URL (for example `https://kovastudio.vercel.app`).
+3. Add every variable from `.env.local` under **Environment Variables**. Set `NEXT_PUBLIC_SITE_URL` and `ALLOWED_ORIGINS` to your Vercel URL (ours is `https://kovastudio-kappa.vercel.app`). They must match the address in the browser exactly, or Go live is blocked.
 4. Deploy. Then add the same URL to Supabase **Site URL** and **Redirect URLs**.
 
 ---
@@ -106,7 +106,9 @@ Admins add characters in `/admin/gallery`. Images go to the Supabase `presets` b
 
 **Payments**
 
-Checkout is not built yet. When someone pays you (bank transfer or a Paystack link): open `/admin`, enter their email, click the pack they bought (it fills the minutes and price), keep "This is a payment" ticked, pick how they paid, and press Update balance. It shows up in Finance straight away. Next step: automatic Paystack checkout.
+A user picks a pack on `/account#buy` and pays with Paystack (card, bank transfer or USSD, test mode until you switch the key). The credits land automatically, once: the webhook (`/api/pay/webhook`) and the return page (`/pay/return`) both call the same `complete_payment` SQL function, so a replay or a refresh never grants twice. Set `PAYSTACK_SECRET_KEY` in `.env.local` and Vercel and run `supabase/migrations/2026-09-28_paystack.sql` to turn this on. It shows up in Finance with method Paystack, no admin work.
+
+For anything Paystack cannot take (a direct bank transfer, cash): open `/admin`, enter their email, click the pack they bought (it fills the minutes and price), keep "This is a payment" ticked, pick how they paid, and press Update balance. It shows up in Finance straight away too.
 
 When you top up fal, log it in `/admin/finance` under "Log money out" with the dollar amount, so the balance estimate stays right.
 

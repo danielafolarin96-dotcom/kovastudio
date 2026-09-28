@@ -33,18 +33,22 @@ Infrastructure (created by Claude):
 - Supabase project `kovastudio`, id `uaqsisnoxbvxemtmrinf`, region eu-west-2 (London), schema applied
 - Vercel project `kovastudio` (prj_joLKf8In9vUpde33PS5usqscFz8z), linked to GitHub `danielafolarin96-dotcom/kovastudio`, public env vars set
 
+Live URL: **https://kovastudio-kappa.vercel.app** (`kovastudio.vercel.app` was taken). Swap to a custom domain later.
+
 1. [x] Supabase project in West EU (London), schema applied
 2. [x] Vercel project created and linked to the GitHub repo, public env vars set
-3. [ ] Supabase: turn OFF "Confirm email" (Authentication > Sign In / Providers > Email)
-4. [ ] Supabase: Site URL `https://kovastudio.vercel.app`, Redirect URLs `http://localhost:3000/**` and `https://kovastudio.vercel.app/**`
+3. [x] Supabase: turn OFF "Confirm email" (Authentication > Sign In / Providers > Email)
+4. [ ] Supabase: Site URL `https://kovastudio-kappa.vercel.app`, Redirect URLs `http://localhost:3000/**` and `https://kovastudio-kappa.vercel.app/**`
 5. [x] AI provider switch built: `AI_PROVIDER=fal` now (Decart rejected the NIN slip), `decart` later
-6. [ ] fal.ai account, $20 to $30 credit, API key
-7. [ ] `.env.local`: paste `SUPABASE_SECRET_KEY` and `FAL_KEY`, then `npm run dev`
-7b. [ ] Supabase SQL Editor: run `supabase/migrations/2026-09-28_finance.sql` (finance columns + expenses table)
-8. [ ] Vercel: add `SUPABASE_SECRET_KEY` and `FAL_KEY` as Sensitive env vars (Production). `AI_PROVIDER=fal` is already set
+6. [x] fal.ai account and API key (scope: API)
+6b. [ ] fal credit: $20 to $30
+7. [x] `.env.local` filled, `npm run dev` works
+7b. [x] Supabase SQL Editor: ran `supabase/migrations/2026-09-28_finance.sql`
+8. [x] Vercel: `SUPABASE_SECRET_KEY` and `FAL_KEY` added as Secret (Production)
+8b. [ ] Vercel: set `NEXT_PUBLIC_SITE_URL` and `ALLOWED_ORIGINS` to `https://kovastudio-kappa.vercel.app`, then redeploy (Go live is blocked until this matches the real URL)
 9. [ ] Email Decart support about other ID options; get an international passport. When verified: add `DECART_API_KEY`, set `AI_PROVIDER=decart`
-10. [ ] Push to GitHub, Vercel deploys automatically
-11. [ ] Sign up with an admin email, upload 6 to 12 preset characters you own
+10. [x] Pushed to GitHub, Vercel deployed (2026-09-27)
+11. [ ] Upload 6 to 12 preset characters you own in /admin/gallery
 12. [ ] End-to-end test on Vercel: signup, go live, switch character, record, OBS Window Capture
 13. [ ] Check the fal dashboard after the first session: confirm the real price per second and that usage stops when a session ends
 14. [ ] Log your fal top-up in /admin/finance > Log money out (with dollars) so the balance estimate starts
@@ -80,12 +84,21 @@ That is about **₦6,000 to ₦6,400 per minute**, paid by manual bank transfer 
 Kova is roughly 35% to 55% cheaper per minute, sells simple minute-based credits, and credits accounts automatically.
 
 Build list:
-- [ ] Paystack account (a Starter business works for naira), get the secret key
-- [ ] `payments` table (reference, user, pack, amount_kobo, status, raw event)
-- [ ] `POST /api/pay/init`: `guardUser`, look up the pack, call Paystack `transaction/initialize` (amount in kobo), save a pending payment, return the checkout URL
-- [ ] `POST /api/pay/webhook`: verify `x-paystack-signature` (HMAC SHA512 of the raw body), re-verify with `transaction/verify`, check amount, then `grant_seconds(user, 'paid', credits * 60, true, reference, null, amount_kobo, 'paystack', pack_id)` exactly once per reference, so Finance picks it up automatically
-- [ ] Turn on the Buy buttons in `components/RateCard.tsx`, success banner on `/account?paid=1`
+- [ ] Paystack account (a Starter business works for naira), get the secret key (owner action)
+- [x] `payments` table (reference, user, pack, amount_kobo, status, raw event) + `complete_payment()` SQL function
+- [x] `POST /api/pay/init`: `guardUser`, look up the pack, call Paystack `transaction/initialize` (amount in kobo), save a pending payment, return the checkout URL
+- [x] `POST /api/pay/webhook` and `/pay/return`: verify `x-paystack-signature` (HMAC SHA512 of the raw body), re-verify with `transaction/verify`, check amount, then `complete_payment()` grants exactly once per reference (calls `grant_seconds(user, 'paid', credits * 60, true, reference, null, amount_kobo, 'paystack', pack_id)`), so Finance picks it up automatically
+- [x] Turn on the Buy buttons in `components/RateCard.tsx`, success banner on `/account?paid=1`
 - [ ] Move packs into a DB table editable in `/admin`
+
+**Owner steps to finish Phase 2** (code is done, waiting on these):
+1. Create a Paystack account, stay in Test mode, copy the secret key (starts `sk_test_`).
+2. Vercel: add `PAYSTACK_SECRET_KEY` (Secret, Production) with that key; also add it to `.env.local`.
+3. Paystack dashboard > Settings > API Keys & Webhooks: Test Webhook URL `https://kovastudio-kappa.vercel.app/api/pay/webhook`, Test Callback URL `https://kovastudio-kappa.vercel.app/pay/return`.
+4. Run `supabase/migrations/2026-09-28_paystack.sql` in the Supabase SQL Editor.
+5. On Vercel, as a non-admin user, buy the Try pack with a Paystack test card. Check the credit lands once, `/account` shows it under Purchases, `/admin/finance` shows it with method Paystack. Then use Paystack's "Resend" on that webhook event and confirm nothing is granted twice.
+6. Going live later: switch to the `sk_live_` key and live webhook/callback URLs after Paystack business verification.
+7. The refund line added to `app/terms/page.tsx` (7 days, unused credits only) needs your sign-off on the wording.
 
 ## Phase 3: Growth features
 
@@ -127,7 +140,7 @@ Rules of thumb:
 
 | | Local | Vercel |
 | --- | --- | --- |
-| URL | http://localhost:3000 | https://kovastudio.vercel.app |
+| URL | http://localhost:3000 | https://kovastudio-kappa.vercel.app |
 | NEXT_PUBLIC_SITE_URL | http://localhost:3000 | the vercel.app URL |
 | ALLOWED_ORIGINS | http://localhost:3000 | the vercel.app URL |
 | Supabase | same project (fine for now) | same project |

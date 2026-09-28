@@ -40,7 +40,8 @@ app/
   welcome/                 house rules gate (sets profiles.accepted_terms_at)
   studio/                  server page, renders components/studio/Studio.tsx
   c/[slug]/                public channel + OBS source (components/Viewer.tsx), Decart only
-  account/                 balances, buy credits, channel, session history
+  account/                 balances, buy credits, channel, session history, ?paid=1/0 banner + purchases
+  pay/return/              Paystack sends the shopper back here; verifies + completes the payment, redirects to /account
   admin/                   Overview (stats, add time, signup gift, recent sessions)
   admin/finance/           revenue, AI cost, fees, profit, provider balance, payments, expenses
   admin/users/             every user with search, filters, sorting, pages
@@ -54,6 +55,8 @@ app/
   api/account/channel      reset channel link
   api/admin/{grant,settings,presets,expenses}  admin only
   api/admin/finance/export CSV of every payment (GET, admin login only)
+  api/pay/init             guardUser, starts a Paystack checkout, inserts a pending payments row
+  api/pay/webhook          Paystack calls this (no guardUser); verifies signature + transaction, then completes the payment
 components/
   Icons.tsx                all icons (stroke SVG, currentColor)
   SiteChrome.tsx           public navbar + footer
@@ -68,9 +71,11 @@ lib/
   admin-users.ts  buildUserRows / queryUsers: pure user list math
   admin-data.ts   server loaders for the admin pages (reads Supabase in 1000-row pages)
   decart.ts     createSessionToken, roomFromSubscribeToken (server)
+  paystack.ts   initialize, verify, verifySignature (server-only, wraps api.paystack.co)
   live/         provider-neutral engine: startEngine() -> decart.ts (Decart SDK) or fal.ts (fal WebRTC signaling)
   supabase/     client.ts (browser), server.ts (user client + admin client)
-supabase/schema.sql        idempotent schema + SQL functions (source of truth)
+supabase/schema.sql        idempotent schema + SQL functions (source of truth); tables include profiles, sessions,
+                            credit_ledger, payments (Paystack checkout attempts), expenses, live_shares, presets
 supabase/migrations/       dated changes for an existing project (paste into the SQL Editor)
 ```
 

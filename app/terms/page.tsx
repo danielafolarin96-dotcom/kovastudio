@@ -36,7 +36,7 @@ export default function TermsPage() {
           "Live time and payments",
           [
             "Live time is counted by the second while the AI is running. Free time is a gift and can change. Paid time does not expire unless we say so in writing.",
-            "Because AI time is used the moment you go live, used time cannot be refunded.",
+            "Because AI time is used the moment you go live, used time cannot be refunded. Unused paid credits can be refunded within 7 days of purchase, minus any part already used.",
           ],
         ],
         [

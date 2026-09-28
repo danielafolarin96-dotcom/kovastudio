@@ -77,6 +77,25 @@ export type LedgerRow = {
   pack_id: string | null;
 };
 
+export type PaymentStatus = "pending" | "paid" | "failed" | "abandoned";
+
+// A row of the payments table: one per Paystack checkout attempt.
+export type Payment = {
+  id: string;
+  reference: string;
+  user_id: string;
+  pack_id: string;
+  credits: number;
+  amount_kobo: number;
+  currency: string;
+  status: PaymentStatus;
+  paystack_id: number | null;
+  channel: string | null;
+  paid_at: string | null;
+  raw: unknown;
+  created_at: string;
+};
+
 export type ExpenseKind = "ai_topup" | "hosting" | "marketing" | "fees" | "other";
 
 export type Expense = {

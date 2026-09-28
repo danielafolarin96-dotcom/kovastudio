@@ -9,25 +9,32 @@ import { displayNameOf, requireUser } from "@/lib/auth";
 import { createAdminClient } from "@/lib/supabase/server";
 import { env, missingEnv } from "@/lib/env";
 import { formatDuration } from "@/lib/config";
-import type { SessionRow } from "@/lib/types";
+import { formatNaira, packById } from "@/lib/pricing";
+import type { Payment, SessionRow } from "@/lib/types";
 
 export const metadata: Metadata = { title: "Account" };
 export const dynamic = "force-dynamic";
 
 const dateFmt = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Lagos" });
 
-export default async function AccountPage() {
+export default async function AccountPage({ searchParams }: { searchParams: Promise<{ paid?: string }> }) {
   const missing = missingEnv();
   if (missing.length) return <SetupNotice missing={missing} />;
 
   const { profile, isAdmin } = await requireUser("/account");
-  const { data: sessions } = await createAdminClient()
-    .from("sessions")
-    .select("*")
-    .eq("user_id", profile.id)
-    .order("started_at", { ascending: false })
-    .limit(15)
-    .returns<SessionRow[]>();
+  const { paid } = await searchParams;
+  const db = createAdminClient();
+  const [{ data: sessions }, { data: payments }] = await Promise.all([
+    db.from("sessions").select("*").eq("user_id", profile.id).order("started_at", { ascending: false }).limit(15).returns<SessionRow[]>(),
+    db
+      .from("payments")
+      .select("id, pack_id, credits, amount_kobo, status, created_at")
+      .eq("user_id", profile.id)
+      .order("created_at", { ascending: false })
+      .limit(10)
+      .returns<Pick<Payment, "id" | "pack_id" | "credits" | "amount_kobo" | "status" | "created_at">[]>(),
+  ]);
+  const latestPaid = paid === "1" ? payments?.find((p) => p.status === "paid") : undefined;
 
   const plan = isAdmin ? "Admin" : profile.has_paid ? "Paid" : "Free";
   const support = process.env.NEXT_PUBLIC_SUPPORT_EMAIL;
@@ -51,6 +58,17 @@ export default async function AccountPage() {
             <span className="h-2 w-2 rounded-full bg-white" /> Go to the studio
           </Link>
         </div>
+
+        {paid === "1" && (
+          <div className="mt-8 rounded-2xl border border-ok/30 bg-ok/10 px-5 py-4 text-sm text-[#bbf7d0]">
+            Payment received.{latestPaid ? ` ${latestPaid.credits} credits added.` : " Your credits will show up in a moment."}
+          </div>
+        )}
+        {paid === "0" && (
+          <div className="mt-8 rounded-2xl border border-signal/30 bg-signal/10 px-5 py-4 text-sm text-[#ffd3d8]">
+            Payment did not go through. No credits were charged. Try again, or use a different payment method.
+          </div>
+        )}
 
         <div className="mt-10 grid gap-4 sm:grid-cols-3">
           <Tile
@@ -146,6 +164,48 @@ export default async function AccountPage() {
             )}
           </section>
         </div>
+
+        <section className="mt-4 card p-6">
+          <h2 className="text-lg font-bold">Purchases</h2>
+          {payments?.length ? (
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead>
+                  <tr className="label border-b border-line text-mute">
+                    <th className="py-2.5 font-semibold">When</th>
+                    <th className="py-2.5 font-semibold">Pack</th>
+                    <th className="py-2.5 font-semibold">Amount</th>
+                    <th className="py-2.5 font-semibold">Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {payments.map((p) => (
+                    <tr key={p.id} className="border-b border-line/70 last:border-0">
+                      <td className="py-3 pr-3 text-soft">{dateFmt.format(new Date(p.created_at))}</td>
+                      <td className="py-3 pr-3">{packById(p.pack_id)?.name ?? p.pack_id}</td>
+                      <td className="py-3 pr-3 font-mono text-xs">{formatNaira(p.amount_kobo / 100)}</td>
+                      <td className="py-3">
+                        <span
+                          className={`rounded-full px-2.5 py-1 text-xs capitalize ${
+                            p.status === "paid"
+                              ? "bg-ok/15 text-[#4ade80]"
+                              : p.status === "pending"
+                                ? "bg-cue/15 text-cue"
+                                : "bg-signal/15 text-signal-2"
+                          }`}
+                        >
+                          {p.status}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="mt-4 text-sm text-mute">No purchases yet. Buy a pack above to see it here.</p>
+          )}
+        </section>
       </main>
     </div>
   );

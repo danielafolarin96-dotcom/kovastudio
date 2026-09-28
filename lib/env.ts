@@ -23,6 +23,7 @@ export const env = {
   aiProvider: (process.env.AI_PROVIDER === "fal" ? "fal" : "decart") as "decart" | "fal",
   decartApiKey: process.env.DECART_API_KEY ?? "",
   falKey: process.env.FAL_KEY ?? "",
+  paystackSecretKey: process.env.PAYSTACK_SECRET_KEY ?? "",
   siteUrl: (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, ""),
   adminEmails: list(process.env.ADMIN_EMAILS).map((e) => e.toLowerCase()),
   allowedOrigins: list(process.env.ALLOWED_ORIGINS ?? process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").map((o) =>
@@ -40,14 +41,15 @@ export function isAdminEmail(email: string | null | undefined): boolean {
 }
 
 // Settings that are not filled in yet. Pages that do not go live (account, admin) only need Supabase,
-// so the site works before the AI key is added. Pass { ai: true } where the AI provider is needed.
-export function missingEnv(opts: { ai?: boolean } = {}): string[] {
+// so the site works before the AI key or the Paystack key is added.
+// Pass { ai: true } where the AI provider is needed, { pay: true } where Paystack is needed.
+export function missingEnv(opts: { ai?: boolean; pay?: boolean } = {}): string[] {
   const missing: string[] = [];
   if (!env.supabaseUrl) missing.push("NEXT_PUBLIC_SUPABASE_URL");
   if (!env.supabasePublishableKey) missing.push("NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY");
   if (!env.supabaseSecretKey) missing.push("SUPABASE_SECRET_KEY");
-  if (!opts.ai) return missing;
-  if (env.aiProvider === "decart" && !env.decartApiKey) missing.push("DECART_API_KEY");
-  if (env.aiProvider === "fal" && !env.falKey) missing.push("FAL_KEY");
+  if (opts.ai && env.aiProvider === "decart" && !env.decartApiKey) missing.push("DECART_API_KEY");
+  if (opts.ai && env.aiProvider === "fal" && !env.falKey) missing.push("FAL_KEY");
+  if (opts.pay && !env.paystackSecretKey) missing.push("PAYSTACK_SECRET_KEY");
   return missing;
 }

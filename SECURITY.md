@@ -15,7 +15,7 @@ What we protect, how, and what is still open. Read before touching auth, meterin
 | `SUPABASE_SECRET_KEY` | `.env.local`, Vercel env | In the browser, in `NEXT_PUBLIC_*`, in logs, in git |
 | `DECART_API_KEY` | `.env.local`, Vercel env | Same |
 | `FAL_KEY` | `.env.local`, Vercel env | Same. The browser only ever gets 60-second fal tokens from `/api/fal/token` |
-| `PAYSTACK_SECRET_KEY` (Phase 2) | `.env.local`, Vercel env | Same |
+| `PAYSTACK_SECRET_KEY` | `.env.local`, Vercel env | Same |
 
 - `.env.local` is in `.gitignore`. Check before every first push: `git status` must not list it.
 - `lib/env.ts` imports `server-only`, so importing it into a client component fails the build.
@@ -73,7 +73,7 @@ What we protect, how, and what is still open. Read before touching auth, meterin
 | No automatic image moderation | Users could upload banned content | Consent tick + terms now; moderation API in Phase 4 |
 | Supabase default email is rate limited | Signups stall | Resend SMTP before launch |
 | No Content Security Policy yet | Less defense against injected scripts | Add CSP in Phase 4 |
-| Manual payments are typed in by an admin | A typo in the amount makes Finance wrong | Paystack webhook in Phase 2 records amounts automatically; fix a wrong amount in Supabase Table Editor (`credit_ledger.amount_kobo`) |
+| Manual bank transfer/cash payments are still typed in by an admin | A typo in the amount makes Finance wrong | Paystack payments are automatic and idempotent (webhook and `/pay/return` both call `complete_payment`, which grants exactly once per reference); this gap only applies to manually-entered rows. Fix a wrong manual amount in Supabase Table Editor (`credit_ledger.amount_kobo`) |
 | AI provider balance on /admin/finance is our own estimate | It can drift from fal's real balance | Log every top-up with the dollar amount; check the fal dashboard weekly |
 | Admin users and finance pages load all rows into memory | Slow once there are many thousands of users or sessions | Move totals into SQL views or functions when it gets slow |
 | Email confirmation is off (owner decision) | Anyone can sign up with an email they do not own | Signup gift is 0, so fake accounts cost nothing. Turn confirmation on if abuse starts |
@@ -95,6 +95,8 @@ What we protect, how, and what is still open. Read before touching auth, meterin
 - [ ] Test that a non-admin gets 403 on `/api/admin/grant`
 - [ ] Test that a free user sees the watermark and an admin does not
 - [ ] `supabase/migrations/2026-09-28_finance.sql` run in the SQL Editor
+- [ ] `supabase/migrations/2026-09-28_paystack.sql` run in the SQL Editor, `PAYSTACK_SECRET_KEY` set in Vercel, test webhook and callback URLs set in the Paystack dashboard
+- [ ] Bought a pack with a Paystack test card, checked the credit lands once, replayed the webhook and confirmed no double grant
 - [ ] First fal top-up logged in /admin/finance (with dollars) so the balance estimate works
 - [ ] fal balance and a low-balance alert set on the fal dashboard
 - [ ] Terms and Privacy reviewed

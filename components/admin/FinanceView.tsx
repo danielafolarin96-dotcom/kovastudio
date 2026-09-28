@@ -5,6 +5,7 @@ import { DeleteExpense, ExpenseForm } from "@/components/admin/AdminForms";
 import { IconBolt, IconClock, IconWallet } from "@/components/Icons";
 import { EXPENSE_LABEL, FINANCE_RANGES, METHOD_LABEL, type Finance } from "@/lib/finance";
 import { formatNaira, packById } from "@/lib/pricing";
+import type { PaystackPaymentRow } from "@/lib/admin-data";
 
 const usd = (n: number) => `$${n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 const mins = (m: number) => `${Math.round(m).toLocaleString("en-NG")} min`;
@@ -12,7 +13,17 @@ const when = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeStyle: 
 const dateOnly = new Intl.DateTimeFormat("en-GB", { dateStyle: "medium", timeZone: "UTC" });
 
 // The finance dashboard. Pure view: all numbers come from computeFinance().
-export default function FinanceView({ f, fx, missingMigration }: { f: Finance; fx: number; missingMigration?: boolean }) {
+export default function FinanceView({
+  f,
+  fx,
+  missingMigration,
+  paystackPayments,
+}: {
+  f: Finance;
+  fx: number;
+  missingMigration?: boolean;
+  paystackPayments: PaystackPaymentRow[];
+}) {
   const rangeLabel = FINANCE_RANGES.find(([k]) => k === f.range)?.[1] ?? "";
   const maxPack = Math.max(1, ...f.byPack.map((p) => p.revenue));
   const providerTone = { ok: "green", low: "amber", empty: "red", untracked: "gray" } as const;
@@ -228,6 +239,42 @@ export default function FinanceView({ f, fx, missingMigration }: { f: Finance; f
           </div>
         ) : (
           <p className="text-sm text-mute">No payments in this range.</p>
+        )}
+      </Card>
+
+      {/* paystack checkout attempts, including stuck ones */}
+      <Card title="Paystack transactions" sub="Latest checkout attempts (any status), so you can spot stuck ones by reference.">
+        {paystackPayments.length ? (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-sm">
+              <thead>
+                <tr>
+                  <th className={thClass}>Date</th>
+                  <th className={thClass}>Customer</th>
+                  <th className={thClass}>Pack</th>
+                  <th className={thClass}>Amount</th>
+                  <th className={thClass}>Status</th>
+                  <th className={thClass}>Reference</th>
+                </tr>
+              </thead>
+              <tbody>
+                {paystackPayments.map((p) => (
+                  <tr key={p.id}>
+                    <td className={`${tdClass} whitespace-nowrap text-soft`}>{when.format(new Date(p.created_at))}</td>
+                    <td className={tdClass}>{p.profiles?.display_name || p.profiles?.email || "Deleted user"}</td>
+                    <td className={tdClass}>{packById(p.pack_id)?.name ?? p.pack_id}</td>
+                    <td className={`${tdClass} font-semibold`}>{formatNaira(p.amount_kobo / 100)}</td>
+                    <td className={tdClass}>
+                      <Badge tone={p.status === "paid" ? "green" : p.status === "pending" ? "amber" : "gray"}>{p.status}</Badge>
+                    </td>
+                    <td className={`${tdClass} font-mono text-xs text-mute`}>{p.reference}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        ) : (
+          <p className="text-sm text-mute">No Paystack checkouts yet.</p>
         )}
       </Card>
 

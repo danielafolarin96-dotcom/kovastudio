@@ -4,7 +4,7 @@ import { env, isAdminEmail } from "@/lib/env";
 import { COST_PER_SECOND_USD } from "@/lib/config";
 import { computeFinance, type FinanceRange, type PaymentRow, type UsageRow } from "@/lib/finance";
 import { buildUserRows, type UserPayment, type UserUsage } from "@/lib/admin-users";
-import type { Expense, LedgerRow, Profile, SessionRow } from "@/lib/types";
+import type { Expense, LedgerRow, Payment, Profile, SessionRow } from "@/lib/types";
 
 // Loads rows for the admin finance and users pages. The math lives in lib/finance.ts and lib/admin-users.ts.
 
@@ -65,6 +65,25 @@ export async function loadFinance(range: FinanceRange) {
     costPerSecondUsd: COST_PER_SECOND_USD,
   });
   return { finance, missingMigration };
+}
+
+export type PaystackPaymentRow = Payment & { profiles?: { email: string; display_name: string | null } | null };
+
+// Latest Paystack checkout attempts (any status), so /admin/finance can show stuck ones by reference.
+// Tolerant of the payments table not existing yet (before the Phase 2 migration is run).
+export async function loadPaystackPayments(limit = 20): Promise<PaystackPaymentRow[]> {
+  const db = createAdminClient();
+  const { data, error } = await db
+    .from("payments")
+    .select("*, profiles(email, display_name)")
+    .order("created_at", { ascending: false })
+    .limit(limit)
+    .returns<PaystackPaymentRow[]>();
+  if (error) {
+    if (!isMissing(error)) console.error("[finance] payments", error);
+    return [];
+  }
+  return data ?? [];
 }
 
 async function paymentsFor(db: ReturnType<typeof createAdminClient>, userId?: string) {

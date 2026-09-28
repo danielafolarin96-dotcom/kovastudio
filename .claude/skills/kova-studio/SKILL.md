@@ -65,15 +65,18 @@ Rules: validate every field, friendly error text, never return secrets or other 
 - Never trust client values for money. The client may report seconds, but billing happens in `settle_session`.
 - After changes, test the full loop: camera on, pick character, go live, switch character, record, end, check the balance updated.
 
-## 5. Add Paystack credits (Phase 2 recipe, naira)
+## 5. Paystack credits (Phase 2, naira): built
 
-1. Migration: `credit_packs` and `payments` tables (see DEVELOPMENT_PLAN.md).
-2. `POST /api/pay/init`: `guardUser`, load pack from DB, call `https://api.paystack.co/transaction/initialize` with `PAYSTACK_SECRET_KEY`, amount in kobo, `reference` = new uuid, `callback_url` = `${siteUrl}/account?paid=1`, store a `pending` payment row.
-3. `POST /api/pay/webhook` (no `guardUser`, it comes from Paystack):
-   - Read the raw body text, compute HMAC SHA512 with `PAYSTACK_SECRET_KEY`, compare with `x-paystack-signature` using `timingSafeEqual`.
-   - On `charge.success`, re-verify with `GET https://api.paystack.co/transaction/verify/:reference`.
-   - Check amount and currency match the pack, then in one SQL function: mark payment `paid` only if it was `pending`, and call `grant_seconds(user, 'paid', credits * 60, true, reference, null, amount_kobo, 'paystack', pack_id)`. This makes it idempotent and puts the money in /admin/finance automatically.
-4. Add `PAYSTACK_SECRET_KEY` to `.env.example`, Vercel env, and SECURITY.md.
+This is already wired up. Read these files rather than rebuild the flow:
+
+- `supabase/migrations/2026-09-28_paystack.sql` (merged into `schema.sql`): the `payments` table and `complete_payment(reference, amount_kobo, currency, paystack_id, channel, raw)`, a `security definer` function that locks the row, is idempotent per reference, and calls the same `grant_seconds` used for manual payments.
+- `lib/paystack.ts`: `initialize()`, `verify()`, `verifySignature()`, a thin wrapper around `api.paystack.co`, `server-only`.
+- `app/api/pay/init/route.ts`: `guardUser`, resolves the pack from `lib/pricing.ts` (never trust a client-sent price), inserts a `pending` `payments` row, calls `initialize()` with `callback_url = ${siteUrl}/pay/return`, returns the checkout URL.
+- `app/api/pay/webhook/route.ts` (no `guardUser`, Paystack calls it directly): checks `x-paystack-signature` on the raw body, then on `charge.success` re-verifies with `verify()` and calls `complete_payment`.
+- `app/pay/return/page.tsx`: where Paystack sends the shopper back. Same `verify()` + `complete_payment()` call as the webhook (whichever gets there first wins, the other becomes a no-op `'already'`), then redirects to `/account?paid=1` or `?paid=0`. Never grants from the query string.
+- `components/RateCard.tsx` (`mode="account"`): the real Buy buttons, POST `/api/pay/init`, redirect to the returned URL.
+
+To extend this (for example, moving packs into a DB table): keep the SQL function as the only place that grants credits, and keep the client-sent pack id resolved against a server-side source, never trusted as-is.
 
 ## 6. Add a finance number or chart
 
