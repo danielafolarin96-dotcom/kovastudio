@@ -72,7 +72,8 @@ What we protect, how, and what is still open. Read before touching auth, meterin
 | Rate limits are in memory | On Vercel each instance counts separately | Upstash Redis in Phase 4 |
 | No automatic image moderation | Users could upload banned content | Consent tick + terms now; moderation API in Phase 4 |
 | Supabase default email is rate limited | Signups stall | Resend SMTP before launch |
-| No Content Security Policy yet | Less defense against injected scripts | Add CSP in Phase 4 |
+| CSP is shipped in report-only (`proxy.ts`, `CSP_ENFORCE = false`) | Logs violations to the browser console but does not block anything yet | Switch to enforcing after the owner reports a clean console on the click-through (landing, signup, login, account, Buy through Paystack and back, admin tabs, studio camera + preset + upload) |
+| CSP allows fal (`wss://fal.run`) and Decart (`wss://api3.decart.ai`) but neither has been exercised through a real live AI session yet (no fal balance, no camera in the environment that built it) | The policy could still be subtly wrong for the live WebRTC/signaling path | Untested until the first real "go live" session on Vercel; watch the console during that session specifically |
 | Manual bank transfer/cash payments are still typed in by an admin | A typo in the amount makes Finance wrong | Paystack payments are automatic and idempotent (webhook and `/pay/return` both call `complete_payment`, which grants exactly once per reference); this gap only applies to manually-entered rows. Fix a wrong manual amount in Supabase Table Editor (`credit_ledger.amount_kobo`) |
 | AI provider balance on /admin/finance is our own estimate | It can drift from fal's real balance | Log every top-up with the dollar amount; check the fal dashboard weekly |
 | Admin users and finance pages load all rows into memory | Slow once there are many thousands of users or sessions | Move totals into SQL views or functions when it gets slow |
