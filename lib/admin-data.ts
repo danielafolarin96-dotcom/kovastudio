@@ -1,6 +1,7 @@
 import "server-only";
 import { createAdminClient } from "@/lib/supabase/server";
 import { env, isAdminEmail } from "@/lib/env";
+import { isMissingTable } from "@/lib/api";
 import { COST_PER_SECOND_USD } from "@/lib/config";
 import { computeFinance, type FinanceRange, type PaymentRow, type UsageRow } from "@/lib/finance";
 import { buildUserRows, type UserPayment, type UserUsage } from "@/lib/admin-users";
@@ -22,10 +23,6 @@ async function fetchAll<T>(page: (from: number, to: number) => PromiseLike<Page<
   return { rows, error: null };
 }
 
-// True when the finance migration has not been run yet (missing column or table).
-const isMissing = (e: { message: string; code?: string } | null) =>
-  !!e && (e.code === "42703" || e.code === "42P01" || e.code === "PGRST205" || e.code === "PGRST204" || /does not exist|could not find/i.test(e.message));
-
 export async function loadFinance(range: FinanceRange) {
   const db = createAdminClient();
   let missingMigration = false;
@@ -41,8 +38,8 @@ export async function loadFinance(range: FinanceRange) {
   if (payments.rows.length && payments.rows[0].amount_kobo === undefined) missingMigration = true;
 
   const expenses = await fetchAll<Expense>((a, b) => db.from("expenses").select("*").order("spent_on", { ascending: false }).range(a, b));
-  if (isMissing(expenses.error)) missingMigration = true;
-  if (payments.error && !isMissing(payments.error)) console.error("[finance] payments", payments.error);
+  if (isMissingTable(expenses.error)) missingMigration = true;
+  if (payments.error && !isMissingTable(payments.error)) console.error("[finance] payments", payments.error);
 
   const usage = await fetchAll<UsageRow>((a, b) =>
     db.from("sessions").select("bucket, billed_seconds, reported_seconds, started_at").order("started_at").range(a, b),
@@ -80,7 +77,7 @@ export async function loadPaystackPayments(limit = 20): Promise<PaystackPaymentR
     .limit(limit)
     .returns<PaystackPaymentRow[]>();
   if (error) {
-    if (!isMissing(error)) console.error("[finance] payments", error);
+    if (!isMissingTable(error)) console.error("[finance] payments", error);
     return [];
   }
   return data ?? [];

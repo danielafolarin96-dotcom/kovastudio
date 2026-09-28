@@ -49,3 +49,13 @@ export async function readJson<T>(req: NextRequest): Promise<Partial<T>> {
     return {};
   }
 }
+
+// True when a Supabase/PostgREST error means a table or column is missing, for example a migration
+// that has not been run yet, or (PGRST205/PGRST204) PostgREST has not reloaded its schema cache yet
+// right after one was. Used to show a friendly "run the migration" message instead of a generic error.
+export function isMissingTable(e: { message: string; code?: string } | null | undefined): boolean {
+  return (
+    !!e &&
+    (e.code === "42703" || e.code === "42P01" || e.code === "PGRST205" || e.code === "PGRST204" || /does not exist|could not find/i.test(e.message))
+  );
+}

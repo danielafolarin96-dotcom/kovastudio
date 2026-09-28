@@ -1,7 +1,7 @@
 import type { NextRequest } from "next/server";
 import { randomUUID } from "crypto";
 import { createAdminClient } from "@/lib/supabase/server";
-import { guardUser, json, jsonError, readJson } from "@/lib/api";
+import { guardUser, isMissingTable, json, jsonError, readJson } from "@/lib/api";
 import { rateLimit } from "@/lib/rate-limit";
 import { env } from "@/lib/env";
 import { packById } from "@/lib/pricing";
@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
   });
   if (insertError) {
     console.error("[pay/init] insert", insertError);
-    if (/relation .* does not exist/i.test(insertError.message)) {
+    if (isMissingTable(insertError)) {
       return jsonError("Run supabase/migrations/2026-09-28_paystack.sql in the Supabase SQL Editor first.", 500);
     }
     return jsonError("Could not start checkout. Try again.", 500);

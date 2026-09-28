@@ -84,21 +84,25 @@ That is about **₦6,000 to ₦6,400 per minute**, paid by manual bank transfer 
 Kova is roughly 35% to 55% cheaper per minute, sells simple minute-based credits, and credits accounts automatically.
 
 Build list:
-- [ ] Paystack account (a Starter business works for naira), get the secret key (owner action)
+- [x] Paystack account (test mode), secret key set in Vercel and `.env.local`
 - [x] `payments` table (reference, user, pack, amount_kobo, status, raw event) + `complete_payment()` SQL function
 - [x] `POST /api/pay/init`: `guardUser`, look up the pack, call Paystack `transaction/initialize` (amount in kobo), save a pending payment, return the checkout URL
 - [x] `POST /api/pay/webhook` and `/pay/return`: verify `x-paystack-signature` (HMAC SHA512 of the raw body), re-verify with `transaction/verify`, check amount, then `complete_payment()` grants exactly once per reference (calls `grant_seconds(user, 'paid', credits * 60, true, reference, null, amount_kobo, 'paystack', pack_id)`), so Finance picks it up automatically
 - [x] Turn on the Buy buttons in `components/RateCard.tsx`, success banner on `/account?paid=1`
 - [ ] Move packs into a DB table editable in `/admin`
 
-**Owner steps to finish Phase 2** (code is done, waiting on these):
-1. Create a Paystack account, stay in Test mode, copy the secret key (starts `sk_test_`).
-2. Vercel: add `PAYSTACK_SECRET_KEY` (Secret, Production) with that key; also add it to `.env.local`.
-3. Paystack dashboard > Settings > API Keys & Webhooks: Test Webhook URL `https://kovastudio-kappa.vercel.app/api/pay/webhook`, Test Callback URL `https://kovastudio-kappa.vercel.app/pay/return`.
-4. Run `supabase/migrations/2026-09-28_paystack.sql` in the Supabase SQL Editor.
-5. On Vercel, as a non-admin user, buy the Try pack with a Paystack test card. Check the credit lands once, `/account` shows it under Purchases, `/admin/finance` shows it with method Paystack. Then use Paystack's "Resend" on that webhook event and confirm nothing is granted twice.
-6. Going live later: switch to the `sk_live_` key and live webhook/callback URLs after Paystack business verification.
-7. The refund line added to `app/terms/page.tsx` (7 days, unused credits only) needs your sign-off on the wording.
+**Phase 2 status: tested and working.** Bought the Try pack on Vercel with a Paystack test card: credit landed once, `/account` shows Paid, `/admin/finance` showed revenue ₦8,000 and net ₦7,780. Refund line in `app/terms/page.tsx` is confirmed as written.
+
+**Owner steps done:**
+1. [x] Paystack account created, test mode, secret key set.
+2. [x] `PAYSTACK_SECRET_KEY` added in Vercel (Secret, Production) and `.env.local`.
+3. [x] Paystack dashboard test Webhook URL and Callback URL set.
+4. [x] `supabase/migrations/2026-09-28_paystack.sql` run in the Supabase SQL Editor.
+5. [x] Bought the Try pack with a Paystack test card on Vercel: credit landed once, showed in `/account` and `/admin/finance` with method Paystack.
+
+**Still open:**
+- [ ] Going live later: switch to the `sk_live_` key and live webhook/callback URLs after Paystack business verification.
+- [ ] Move packs into a DB table editable in `/admin` (build list item above).
 
 ## Phase 3: Growth features
 
