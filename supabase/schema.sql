@@ -248,6 +248,21 @@ begin
   -- Server-side floor: time between the AI starting and our last contact.
   if s.generating_at is not null then
     v_floor := greatest(0, floor(extract(epoch from (p_contact - s.generating_at)))::int - 5);
+  elsif p_reason in ('stale', 'time_up') and s.last_heartbeat_at is not null then
+    -- The AI never confirmed it started, and we are force-closing this session because it
+    -- went quiet or ran over time (the cron sweep or the heartbeat route's own cutoff), not
+    -- because the user stopped cleanly or something failed on our end. We only have proof
+    -- of life up to the last heartbeat we actually received, so bill against that instead of
+    -- p_contact (when the sweep happens to run, which can be long after the client went
+    -- quiet), minus a grace window long enough for a normal connection to negotiate
+    -- (lib/live/fal.ts times out negotiation at 25s).
+    --
+    -- Deliberately narrow: a clean user_stop, a cancelled/failed start, a provider error, or
+    -- a session that never sent a single heartbeat (no proof of life at all, most likely an
+    -- honest crash before anything connected) all keep the original floor of 0 and refund in
+    -- full below. A client that suppresses every heartbeat from the start still gets a full
+    -- refund; this closes the "sent at least one heartbeat, then went dark" case, not that one.
+    v_floor := greatest(0, floor(extract(epoch from (s.last_heartbeat_at - s.started_at)))::int - 20);
   end if;
 
   v_billed := least(s.reserved_seconds, greatest(v_reported, v_floor, 0));

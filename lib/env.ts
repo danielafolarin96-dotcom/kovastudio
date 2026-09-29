@@ -24,6 +24,7 @@ export const env = {
   decartApiKey: process.env.DECART_API_KEY ?? "",
   falKey: process.env.FAL_KEY ?? "",
   paystackSecretKey: process.env.PAYSTACK_SECRET_KEY ?? "",
+  cronSecret: process.env.CRON_SECRET ?? "",
   siteUrl: (process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").replace(/\/$/, ""),
   adminEmails: list(process.env.ADMIN_EMAILS).map((e) => e.toLowerCase()),
   allowedOrigins: list(process.env.ALLOWED_ORIGINS ?? process.env.NEXT_PUBLIC_SITE_URL ?? "http://localhost:3000").map((o) =>

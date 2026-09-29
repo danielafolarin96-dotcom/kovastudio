@@ -14,7 +14,13 @@ export function parseRange(v: string | undefined): FinanceRange {
   return v === "7d" || v === "90d" || v === "all" ? v : "30d";
 }
 
-export type UsageRow = { bucket: string; billed_seconds: number | null; reported_seconds: number; started_at: string };
+export type UsageRow = {
+  bucket: string;
+  billed_seconds: number | null;
+  reported_seconds: number;
+  started_at: string;
+  end_reason?: string | null;
+};
 export type PaymentRow = LedgerRow & { profiles?: { email: string; display_name: string | null } | null };
 
 export type FinanceInput = {
@@ -60,6 +66,7 @@ export type Finance = {
     status: "ok" | "low" | "empty" | "untracked";
   };
   outstanding: { paidMinutes: number; freeMinutes: number; costToServe: number };
+  staleSessions: { count: number; minutes: number };
   transactions: PaymentRow[];
   expenseRows: Expense[];
   lifetimeRevenue: number;
@@ -161,6 +168,16 @@ export function computeFinance(input: FinanceInput): Finance {
   const owedUsd = input.outstandingPaidSeconds * cps;
   const status = !topups.length ? "untracked" : balanceUsd <= 0 ? "empty" : balanceUsd < owedUsd ? "low" : "ok";
 
+  // Sessions the server had to force-close after the client went silent past its reserved
+  // time (see settle_session's floor and the cron sweep). We can't see fal's own usage
+  // numbers, so a rising count/total here is the visible proxy for "someone tried to
+  // stream past what they paid for."
+  const staleRows = usage.filter((u) => u.end_reason === "stale" || u.end_reason === "time_up");
+  const staleSessions = {
+    count: staleRows.length,
+    minutes: staleRows.reduce((s, u) => s + used(u), 0) / 60,
+  };
+
   return {
     range,
     fromLabel: dayLabel.format(new Date(fromMs)),
@@ -188,6 +205,7 @@ export function computeFinance(input: FinanceInput): Finance {
       freeMinutes: input.outstandingFreeSeconds / 60,
       costToServe: owedUsd * fx,
     },
+    staleSessions,
     transactions: [...pays].sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at)).slice(0, 50),
     expenseRows: [...exps].sort((a, b) => (a.spent_on < b.spent_on ? 1 : -1)).slice(0, 50),
     lifetimeRevenue: input.payments.reduce((s, p) => s + naira(p.amount_kobo), 0),

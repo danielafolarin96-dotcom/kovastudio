@@ -42,7 +42,7 @@ export async function loadFinance(range: FinanceRange) {
   if (payments.error && !isMissingTable(payments.error)) console.error("[finance] payments", payments.error);
 
   const usage = await fetchAll<UsageRow>((a, b) =>
-    db.from("sessions").select("bucket, billed_seconds, reported_seconds, started_at").order("started_at").range(a, b),
+    db.from("sessions").select("bucket, billed_seconds, reported_seconds, started_at, end_reason").order("started_at").range(a, b),
   );
   const balances = await fetchAll<{ paid_seconds: number; free_seconds: number }>((a, b) =>
     db.from("profiles").select("paid_seconds, free_seconds").order("id").range(a, b),

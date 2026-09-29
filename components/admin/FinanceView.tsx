@@ -43,6 +43,14 @@ export default function FinanceView({
         </p>
       )}
 
+      {f.staleSessions.count > 0 && (
+        <p className="rounded-2xl border border-cue/30 bg-cue/10 px-5 py-4 text-sm text-[#ffe2a8]">
+          {f.staleSessions.count} session{f.staleSessions.count === 1 ? "" : "s"} had to be force-closed after going silent past its
+          reserved time in {rangeLabel.toLowerCase()} ({mins(f.staleSessions.minutes)} billed through the safety net). If this keeps
+          happening, check the fal balance and consider tightening session caps.
+        </p>
+      )}
+
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex gap-1 rounded-full border border-line bg-surface p-1">
           {FINANCE_RANGES.map(([key, label]) => (
