@@ -6,10 +6,10 @@ import { createServerClient } from "@supabase/ssr";
 
 const PRIVATE_PREFIXES = ["/studio", "/account", "/admin", "/welcome"];
 
-// Ship in report-only first (logs violations to the console, blocks nothing) so the owner
-// can click through the whole app on Vercel before anything is actually enforced.
-// Flip to true only after that comes back clean, in its own commit.
-const CSP_ENFORCE = false;
+// Report-only click-through came back clean (2026-09-29), CSP is now enforced.
+// The one report-only hit was zod's Function("") probe (from @decartai/sdk), caught
+// internally and harmless, see the note below. Do not add 'unsafe-eval' to undo it.
+const CSP_ENFORCE = true;
 const CSP_HEADER = CSP_ENFORCE ? "Content-Security-Policy" : "Content-Security-Policy-Report-Only";
 
 const supabaseHost = (() => {
@@ -27,6 +27,9 @@ function buildCsp(nonce: string): string {
   const dev = process.env.NODE_ENV !== "production";
   const supabaseHttp = supabaseHost ? `https://${supabaseHost}` : "";
   const supabaseWs = supabaseHost ? `wss://${supabaseHost}` : "";
+  // No 'unsafe-eval' in prod. zod (pulled in by @decartai/sdk) probes with Function("") on
+  // /studio and /c/[slug] to decide whether it can JIT-compile, catches the throw itself and
+  // falls back cleanly, so it works fine without this. Do not add it back for that probe.
   const scriptSrc = dev
     ? `'self' 'unsafe-eval' 'nonce-${nonce}' 'strict-dynamic'`
     : `'self' 'nonce-${nonce}' 'strict-dynamic'`;

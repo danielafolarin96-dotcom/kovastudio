@@ -117,7 +117,7 @@ Build list:
 
 - [ ] Image moderation on uploads and presets
 - [ ] Shared rate limiting (Upstash Redis) instead of in-memory
-- [ ] Content Security Policy header
+- [x] Content Security Policy header (enforced in `proxy.ts`, 2026-09-29, see SECURITY.md)
 - [ ] Error tracking (Sentry free tier)
 - [ ] Lawyer review of Terms and Privacy (NDPA)
 - [ ] Automated tests for the SQL functions and API routes
