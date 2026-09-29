@@ -20,10 +20,21 @@ export const MAX_IMAGE_SIDE = 1024;
 // How often the studio reports usage to the server while live.
 export const HEARTBEAT_MS = 10_000;
 
+// Studio background field cap. The combined prompt still hard-caps at 200 chars below.
+export const MAX_BACKGROUND_CHARS = 150;
+
 // Decart's recommended prompt for reference-image character swaps.
-export function buildPrompt(extra: string | null | undefined): string {
+export function buildPrompt(
+  presetExtra: string | null | undefined,
+  background: string | null | undefined,
+  details: string | null | undefined,
+): string {
   const base = "Transform into this character";
-  const cleaned = (extra ?? "").trim().replace(/\s+/g, " ").slice(0, 200);
+  const bg = (background ?? "").trim();
+  const segments = [presetExtra, bg ? `background: ${bg}` : null, details]
+    .map((s) => (s ?? "").trim())
+    .filter(Boolean);
+  const cleaned = segments.join(", ").replace(/\s+/g, " ").slice(0, 200);
   return cleaned ? `${base}, ${cleaned}` : base;
 }
 

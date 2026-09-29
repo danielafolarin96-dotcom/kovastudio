@@ -35,9 +35,12 @@ import {
   readPref,
   writePref,
 } from "@/components/studio/util";
-import { HEARTBEAT_MS, MODEL_NAME, buildPrompt, formatClock, formatDuration } from "@/lib/config";
+import { HEARTBEAT_MS, MAX_BACKGROUND_CHARS, MODEL_NAME, buildPrompt, formatClock, formatDuration } from "@/lib/config";
 import { prepareFromUrl, prepareReferenceImage, type PreparedImage } from "@/lib/image";
+import { hasBlockedWords } from "@/lib/prompt-filter";
 import type { PresetCard, StudioAccount } from "@/lib/types";
+
+const BACKGROUND_SUGGESTIONS = ["beach", "neon city", "cozy studio", "stage lights"];
 
 const model = models.realtime(MODEL_NAME);
 const MODEL_FPS = resolveFpsNumber(model.fps, 25);
@@ -76,8 +79,8 @@ function useIsDesktop() {
   );
 }
 
-function promptFor(character: Character, extra: string) {
-  return buildPrompt([character.promptExtra, extra.trim()].filter(Boolean).join(", "));
+function promptFor(character: Character, background: string, details: string) {
+  return buildPrompt(character.promptExtra, background, details);
 }
 
 export default function Studio({ account, presets }: { account: StudioAccount; presets: PresetCard[] }) {
@@ -110,6 +113,7 @@ export default function Studio({ account, presets }: { account: StudioAccount; p
   const [tab, setTab] = useState<"gallery" | "upload">(presets.length ? "gallery" : "upload");
   const [character, setCharacter] = useState<Character | null>(null);
   const [loadingPreset, setLoadingPreset] = useState<string | null>(null);
+  const [background, setBackground] = useState("");
   const [extra, setExtra] = useState("");
   const [consent, setConsent] = useState(false);
   const [dragging, setDragging] = useState(false);
@@ -146,11 +150,12 @@ export default function Studio({ account, presets }: { account: StudioAccount; p
 
   const busy = status === "starting" || status === "connecting";
   const live = status === "connected" || status === "generating" || status === "reconnecting";
-  const characterKey = character ? `${character.prepared.url}|${extra.trim()}` : null;
+  const characterKey = character ? `${character.prepared.url}|${background.trim()}|${extra.trim()}` : null;
   const dirty = live && characterKey !== null && characterKey !== appliedKey;
   const needsConsent = character?.source === "upload";
   const hasTime = account.isAdmin || balances.free > 0 || balances.paid > 0;
-  const canStart = cameraOn && !!character && (!needsConsent || consent) && !busy && !live && hasTime;
+  const promptBlocked = hasBlockedWords(`${background} ${extra}`);
+  const canStart = cameraOn && !!character && (!needsConsent || consent) && !promptBlocked && !busy && !live && hasTime;
 
   const channelSupported = account.provider === "decart";
   const channelUrl = `${account.siteUrl}/c/${account.channelSlug}`;
@@ -537,7 +542,7 @@ export default function Studio({ account, presets }: { account: StudioAccount; p
       engine = await startEngine({
         auth,
         stream,
-        input: { prompt: promptFor(chosen, extra), image: chosen.prepared.blob },
+        input: { prompt: promptFor(chosen, background, extra), image: chosen.prepared.blob },
         events: {
           onRemoteStream: (remote) => {
             if (!current()) return;
@@ -615,10 +620,14 @@ export default function Studio({ account, presets }: { account: StudioAccount; p
       setError("Tick the permission box for the new picture first.");
       return;
     }
+    if (promptBlocked) {
+      setError("That wording isn't allowed. Try something else.");
+      return;
+    }
     setApplying(true);
     setError(null);
     try {
-      await engine.set({ prompt: promptFor(character, extra), image: character.prepared.blob });
+      await engine.set({ prompt: promptFor(character, background, extra), image: character.prepared.blob });
       setAppliedKey(characterKey);
     } catch (err) {
       setError(describeError(err));
@@ -809,7 +818,32 @@ export default function Studio({ account, presets }: { account: StudioAccount; p
             )}
             {character?.prepared.warning && <p className="mt-2 text-xs text-cue">{character.prepared.warning}</p>}
 
-            <label className="mt-5 block text-sm font-medium text-soft" htmlFor="extra">
+            <label className="mt-5 block text-sm font-medium text-soft" htmlFor="background">
+              Background <span className="font-normal text-mute">(optional)</span>
+            </label>
+            <div className="mt-2 flex flex-wrap gap-1.5">
+              {BACKGROUND_SUGGESTIONS.map((s) => (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setBackground(s)}
+                  className="rounded-full bg-surface-3 px-3 py-1.5 text-xs font-medium text-soft transition hover:text-fg"
+                >
+                  {s}
+                </button>
+              ))}
+            </div>
+            <input
+              id="background"
+              value={background}
+              maxLength={MAX_BACKGROUND_CHARS}
+              onChange={(e) => setBackground(e.target.value)}
+              placeholder="e.g. neon city street at night"
+              className="field field-sm mt-2"
+            />
+            <p className="mt-1.5 text-xs text-cue">Changing the background can reduce character quality.</p>
+
+            <label className="mt-4 block text-sm font-medium text-soft" htmlFor="extra">
               Extra details <span className="font-normal text-mute">(optional)</span>
             </label>
             <input
@@ -820,6 +854,7 @@ export default function Studio({ account, presets }: { account: StudioAccount; p
               placeholder="e.g. wearing a red cape"
               className="field field-sm mt-2"
             />
+            {promptBlocked && <p className="mt-1.5 text-xs text-signal-2">That wording isn't allowed. Try something else.</p>}
 
             {needsConsent && (
               <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface-2 p-3 text-xs leading-relaxed text-soft">
