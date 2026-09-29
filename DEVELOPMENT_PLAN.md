@@ -118,6 +118,7 @@ Build list:
 - [ ] Image moderation on uploads and presets
 - [ ] Shared rate limiting (Upstash Redis) instead of in-memory
 - [x] Content Security Policy header (enforced in `proxy.ts`, 2026-09-29, see SECURITY.md)
+- [x] fal metering hole narrowed: `settle_session` floors billing on wall-clock time to the last heartbeat when a session is force-closed stale/over time and at least one heartbeat came in, a cron (`/api/cron/settle-sessions`, daily on Vercel Hobby, optional free 5-minute external pinger documented in SECURITY.md) settles stale sessions on a timer, `/admin/finance` warns on force-closed sessions (2026-09-29, see SECURITY.md). Still open: a client that never sends a single heartbeat still refunds in full, and fal itself has no way for us to force a live stream closed, only switching `AI_PROVIDER` to a funded, tested Decart key gives a real hard cutoff
 - [ ] Error tracking (Sentry free tier)
 - [ ] Lawyer review of Terms and Privacy (NDPA)
 - [ ] Automated tests for the SQL functions and API routes
